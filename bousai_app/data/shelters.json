@@ -1,18 +1,38 @@
 [
   {
     "id": 1,
-    "name": "御所見小学校"
+    "name": "御所見小学校",
+    "district": "中央",
+    "pet_friendly": true,
+    "barrier_free": true,
+    "has_preschool_children": true,
+    "disaster_types": ["津波", "洪水", "地滑り"]
   },
   {
     "id": 2,
-    "name": "片瀬小学校"
+    "name": "片瀬小学校",
+    "district": "海岸",
+    "pet_friendly": false,
+    "barrier_free": true,
+    "has_preschool_children": true,
+    "disaster_types": ["津波", "土石流"]
   },
   {
     "id": 5,
-    "name": "鵠洋小学校"
+    "name": "鵠洋小学校",
+    "district": "北",
+    "pet_friendly": true,
+    "barrier_free": false,
+    "has_preschool_children": false,
+    "disaster_types": ["洪水", "地滑り", "土石流"]
   },
   {
     "id": 6,
-    "name": "あ"
+    "name": "あ",
+    "district": "東",
+    "pet_friendly": false,
+    "barrier_free": true,
+    "has_preschool_children": false,
+    "disaster_types": ["津波", "洪水"]
   }
 ]

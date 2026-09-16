@@ -1,20 +1,115 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>検索結果</h2>
+<style>
+  .results-page {
+    max-width: 980px;
+    margin: 32px auto;
+    padding: 0 20px 48px;
+  }
 
-{% if results %}
-  <ul>
-    {% for shelter in results %}
-    <li>{{ shelter.name }}</li>
-    {% endfor %}
-  </ul>
-{% else %}
-  <p>該当する避難所が見つかりませんでした</p>
-{% endif %}
+  .results-card {
+    background: #fff;
+    border: 1px solid #e1ebf8;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(37, 99, 235, 0.06);
+    padding: 28px;
+  }
 
-<p>
-  <a href="/shelter_search">検索画面に戻る</a> |
-  <a href="/">トップページへ戻る</a>
-</p>
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 18px;
+  }
+
+  .tag {
+    background: #edf5ff;
+    color: #1d4ed8;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  .shelter-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 12px;
+  }
+
+  .shelter-item {
+    border: 1px solid #e6edf9;
+    border-radius: 12px;
+    padding: 16px 18px;
+    background: #f9fbff;
+  }
+
+  .shelter-item h3 {
+    margin: 0 0 10px;
+    font-size: 1.1rem;
+  }
+
+  .shelter-item p {
+    margin: 6px 0;
+    color: #41506b;
+  }
+
+  .nav-links {
+    margin-top: 22px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .nav-links a {
+    padding: 9px 14px;
+    border-radius: 999px;
+    text-decoration: none;
+    background: #edf5ef;
+    color: #1c7d49;
+    font-weight: 700;
+  }
+</style>
+
+<div class="results-page">
+  <div class="results-card">
+    <h2>検索結果</h2>
+
+    {% if criteria %}
+      <div class="meta">
+        {% if criteria.pet_friendly %}<span class="tag">ペット可能</span>{% endif %}
+        {% if criteria.barrier_free %}<span class="tag">バリアフリー</span>{% endif %}
+        {% if criteria.has_preschool_children %}<span class="tag">未就学児対応</span>{% endif %}
+        {% for disaster in criteria.disaster_types %}
+          <span class="tag">{{ disaster }}</span>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if results %}
+      <ul class="shelter-list">
+        {% for shelter in results %}
+        <li class="shelter-item">
+          <h3>{{ shelter.name }}</h3>
+          <p>地区: {{ shelter.district or '未登録' }}</p>
+          <p>ペット可能: {{ 'はい' if shelter.pet_friendly else 'いいえ' }}</p>
+          <p>バリアフリー: {{ 'あり' if shelter.barrier_free else 'なし' }}</p>
+          <p>未就学児対応: {{ 'あり' if shelter.has_preschool_children else 'なし' }}</p>
+          <p>対応災害: {{ shelter.disaster_types | join(', ') if shelter.disaster_types else '未登録' }}</p>
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>該当する避難所が見つかりませんでした。</p>
+    {% endif %}
+
+    <div class="nav-links">
+      <a href="/shelter_search">検索画面に戻る</a>
+      <a href="/">トップページへ戻る</a>
+    </div>
+  </div>
+</div>
 {% endblock %}

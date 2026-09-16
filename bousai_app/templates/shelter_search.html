@@ -1,8 +1,210 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>避難所検索</h2>
-<p>登録されている避難所を確認できます。</p>
+<style>
+  .search-page {
+    max-width: 980px;
+    margin: 32px auto;
+    padding: 0 20px 48px;
+  }
 
-<p><a href="/all_shelters">全施設一覧</a></p>
+  .panel {
+    background: #fff;
+    border: 1px solid #dfeaf7;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(37, 99, 235, 0.06);
+    padding: 28px;
+  }
+
+  .search-form {
+    display: grid;
+    gap: 24px;
+  }
+
+  .section {
+    border-top: 1px solid #ebf1f9;
+    padding-top: 18px;
+  }
+
+  .section:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  .section h3 {
+    margin: 0 0 14px;
+    color: #1f4b96;
+    font-size: 1.1rem;
+  }
+
+  .location-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .location-btn,
+  .search-btn,
+  .link-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    font-weight: 700;
+  }
+
+  .location-btn {
+    background: #e8f2ff;
+    color: #18499c;
+  }
+
+  .search-btn {
+    background: linear-gradient(135deg, #1d4ed8, #2563eb);
+    color: white;
+    min-width: 180px;
+  }
+
+  .link-btn {
+    background: #edf5ef;
+    color: #1f7d4b;
+  }
+
+  .checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px 18px;
+  }
+
+  .check-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #f8fbff;
+    border: 1px solid #e2ebf8;
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+
+  .check-item input {
+    width: 18px;
+    height: 18px;
+  }
+
+  .result-links {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+  }
+
+  @media (max-width: 640px) {
+    .panel { padding: 20px 16px; }
+    .search-btn { width: 100%; }
+  }
+</style>
+
+<div class="search-page">
+  <div class="panel">
+    <h2>避難所検索</h2>
+    <p>現在地や条件を選んで、適した避難所を探せます。</p>
+
+    <form class="search-form" method="get" action="/search_results">
+      <div class="section">
+        <h3>位置情報</h3>
+        <div class="location-row">
+          <button type="button" class="location-btn" id="location-btn">位置情報を許可して現在地を取得</button>
+        </div>
+        <input type="hidden" name="latitude" id="latitude">
+        <input type="hidden" name="longitude" id="longitude">
+      </div>
+
+      <div class="section">
+        <h3>避難所の条件</h3>
+        <div class="checkbox-grid">
+          <label class="check-item">
+            <input type="checkbox" name="pet_friendly">
+            <span>ペット可能</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" name="barrier_free">
+            <span>バリアフリーあり</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" name="has_preschool_children">
+            <span>未就学児がいる</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>災害の種類</h3>
+        <div class="checkbox-grid">
+          <label class="check-item">
+            <input type="checkbox" name="disaster_type" value="津波">
+            <span>津波</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" name="disaster_type" value="洪水">
+            <span>洪水</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" name="disaster_type" value="地滑り">
+            <span>地滑り</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" name="disaster_type" value="土石流">
+            <span>土石流</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="section">
+        <button type="submit" class="search-btn">避難所を検索</button>
+      </div>
+    </form>
+
+    <div class="result-links">
+      <a class="link-btn" href="/all_shelters">全施設一覧</a>
+      <a class="link-btn" href="/">トップページへ戻る</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const button = document.getElementById('location-btn');
+    const latitudeInput = document.getElementById('latitude');
+    const longitudeInput = document.getElementById('longitude');
+
+    button.addEventListener('click', function () {
+      if (!navigator.geolocation) {
+        alert('このブラウザでは位置情報が利用できません。');
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = '位置情報を取得中...';
+
+      navigator.geolocation.getCurrentPosition(
+        function (position) {
+          latitudeInput.value = position.coords.latitude;
+          longitudeInput.value = position.coords.longitude;
+          button.textContent = '位置情報を取得しました';
+          button.disabled = false;
+        },
+        function () {
+          alert('位置情報の取得に失敗しました。ブラウザの設定をご確認ください。');
+          button.textContent = '位置情報を許可して現在地を取得';
+          button.disabled = false;
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  });
+</script>
 {% endblock %}

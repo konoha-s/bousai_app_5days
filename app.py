@@ -144,9 +144,36 @@ def format_report_time(iso_str):
         return iso_str
 
 
-def filter_shelters(district=None):
-    """district 指定があれば一致する避難所のみ、なければ全件を返す"""
-    return [s for s in shelters if not district or s.get('district') == district]
+def filter_shelters(district=None, criteria=None):
+    """district と検索条件をまとめて避難所を絞り込む"""
+    criteria = criteria or {}
+    selected_disasters = criteria.get('disaster_types') or []
+    selected_disasters = [d for d in selected_disasters if d]
+
+    def is_checked(flag_name):
+        value = criteria.get(flag_name)
+        return value in (True, 'true', 'True', '1', 'on', 'yes')
+
+    results = []
+    for shelter in shelters:
+        if district and shelter.get('district') != district:
+            continue
+
+        if is_checked('pet_friendly') and not shelter.get('pet_friendly', False):
+            continue
+        if is_checked('barrier_free') and not shelter.get('barrier_free', False):
+            continue
+        if is_checked('has_preschool_children') and not shelter.get('has_preschool_children', False):
+            continue
+
+        if selected_disasters:
+            shelter_disasters = set(shelter.get('disaster_types', []))
+            if not set(selected_disasters).issubset(shelter_disasters):
+                continue
+
+        results.append(shelter)
+
+    return results
 
 
 def parse_area_warnings(warning_data):
@@ -324,6 +351,18 @@ def shelter_search():
 def all_shelters():
     return render_template('search_results.html', results=shelters)
 
+# 検索結果ページ：templates/search_results.html を返す
+@app.route('/search_results')
+def search_results():
+    criteria = {
+        'pet_friendly': request.args.get('pet_friendly') == 'on',
+        'barrier_free': request.args.get('barrier_free') == 'on',
+        'has_preschool_children': request.args.get('has_preschool_children') == 'on',
+        'disaster_types': request.args.getlist('disaster_type')
+    }
+    results = filter_shelters(request.args.get('district'), criteria)
+    return render_template('search_results.html', results=results, criteria=criteria)
+
 
 # 指示ボード：住民向けの指示を一覧で確認する
 @app.route('/board')
@@ -331,12 +370,6 @@ def all_shelters():
 def board():
     resident_instructions = [i for i in instructions if i.get('target') == '住民']
     return render_template('board.html', instructions=resident_instructions)
-
-# 検索結果ページ：templates/search_results.html を返す
-@app.route('/search_results')
-def search_results():
-    results = filter_shelters(request.args.get('district'))
-    return render_template('search_results.html', results=results)
 
 # JSON API：/shelters?district=地区名
 @app.route('/shelters', methods=['GET'])
