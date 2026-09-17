@@ -3,6 +3,7 @@ from urllib.parse import urlparse, urljoin
 from functools import wraps
 import json
 import os
+import re
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
@@ -144,31 +145,186 @@ def format_report_time(iso_str):
         return iso_str
 
 
+def split_search_keywords(value):
+    """自由検索欄を複数キーワードに分割する"""
+    if not value:
+        return []
+    return [keyword.casefold() for keyword in re.split(r'[\s,、。]+', str(value).strip()) if keyword]
+
+
+def normalize_truthy(value):
+    """真偽値の表現ゆれを安全に標準化する"""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().casefold()
+        if normalized in {'true', '1', 'yes', 'y', 'on', '可', 'あり', '対応', '対応あり'}:
+            return True
+        if normalized in {'false', '0', 'no', 'n', 'off', '不可', 'なし', '未対応'}:
+            return False
+    return bool(value)
+
+
+def has_criterion(criteria, *names):
+    """検索条件のキー名ゆれを受け取り、選択されているか確認する"""
+    for name in names:
+        value = criteria.get(name)
+        if value is None:
+            continue
+        if isinstance(value, (list, tuple, set)):
+            if any(str(item).strip() not in {'', 'false', 'False', 'off', 'OFF'} for item in value):
+                return True
+            continue
+        if value not in ('', 'false', 'False', 'off', 'OFF'):
+            return True
+    return False
+
+
+def shelter_bool_value(shelter, *names):
+    """避難所データのキー名ゆれから真偽値を得る"""
+    for name in names:
+        if name in shelter:
+            return normalize_truthy(shelter.get(name))
+    return False
+
+
+def shelter_disaster_set(shelter):
+    """避難所の災害情報を正規化して集合にする"""
+    values = set()
+    for item in shelter.get('disaster_types', []) or []:
+        values.add(str(item).strip())
+    for disaster_name, aliases in {
+        '地震': ('earthquake', 'earthquake_safe', '地震'),
+        '洪水': ('flood', 'flood_safe', '洪水'),
+        '土砂崩れ': ('landslide', 'landslide_safe', '土砂崩れ'),
+        '津波': ('tsunami', 'tsunami_safe', '津波'),
+        '土石流': ('debris_flow', 'debris_flow_safe', '土石流'),
+    }.items():
+        if shelter_bool_value(shelter, *aliases):
+            values.add(disaster_name)
+    return {str(value).strip() for value in values if str(value).strip()}
+
+
+def alias_variants_for_key(key):
+    """キー名の表記ゆれに対応する検索語の候補を返す"""
+    aliases = {
+        'pet_friendly': ['pet', 'pet_friendly', 'pet_allowed', 'pets_allowed', 'ペット', 'ペット可'],
+        'pet': ['pet', 'pet_friendly', 'pet_allowed', 'pets_allowed', 'ペット', 'ペット可'],
+        'pet_allowed': ['pet', 'pet_friendly', 'pet_allowed', 'pets_allowed', 'ペット', 'ペット可'],
+        'pets_allowed': ['pet', 'pet_friendly', 'pet_allowed', 'pets_allowed', 'ペット', 'ペット可'],
+        'barrier_free': ['barrier_free', 'barrierFree', 'バリアフリー'],
+        'barrierFree': ['barrier_free', 'barrierFree', 'バリアフリー'],
+        'has_preschool_children': ['has_preschool_children', 'preschool', 'preschool_children', '未就学児'],
+        'preschool': ['has_preschool_children', 'preschool', 'preschool_children', '未就学児'],
+        'preschool_children': ['has_preschool_children', 'preschool', 'preschool_children', '未就学児'],
+        'parking_available': ['parking', 'parking_available', '駐車場'],
+        'parking': ['parking', 'parking_available', '駐車場'],
+        'senior_disability_support': ['senior_disability_support', 'elderly', 'elderly_consideration', '高齢者', '高齢者への配慮', '障害のある方への配慮'],
+        'elderly': ['senior_disability_support', 'elderly', 'elderly_consideration', '高齢者', '高齢者への配慮'],
+        'elderly_consideration': ['senior_disability_support', 'elderly', 'elderly_consideration', '高齢者', '高齢者への配慮'],
+        'disability_consideration': ['disability', 'disability_consideration', '障害者', '障害のある方への配慮'],
+        'disability': ['disability', 'disability_consideration', '障害者', '障害のある方への配慮'],
+    }
+    return aliases.get(str(key), [str(key)])
+
+
+def shelter_search_text(shelter):
+    """避難所の検索対象文字列を整形して返す"""
+    text_parts = []
+    for key, value in shelter.items():
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            text_parts.append(str(key))
+            if value:
+                text_parts.extend(alias_variants_for_key(key))
+            continue
+        if isinstance(value, (list, tuple, set)):
+            text_parts.extend(str(item) for item in value)
+            continue
+        text_parts.append(str(value))
+    return ' '.join(text_parts).casefold()
+
+
 def filter_shelters(district=None, criteria=None):
     """district と検索条件をまとめて避難所を絞り込む"""
     criteria = criteria or {}
-    selected_disasters = criteria.get('disaster_types') or []
-    selected_disasters = [d for d in selected_disasters if d]
+    search_keywords = split_search_keywords(criteria.get('free_search', ''))
 
-    def is_checked(flag_name):
-        value = criteria.get(flag_name)
-        return value in (True, 'true', 'True', '1', 'on', 'yes')
+    requested_count = criteria.get('evacuee_count')
+    try:
+        requested_count = int(str(requested_count).strip()) if str(requested_count).strip() not in ('', None) else None
+    except (TypeError, ValueError):
+        requested_count = None
+    if requested_count is not None and requested_count < 1:
+        requested_count = None
+
+    selected_disasters = []
+    raw_disasters = criteria.get('disaster_types') or []
+    if isinstance(raw_disasters, str):
+        raw_disasters = [raw_disasters]
+    for disaster in raw_disasters:
+        if disaster not in (None, ''):
+            selected_disasters.append(str(disaster))
+    selected_disasters = [d.strip() for d in selected_disasters if d and d.strip()]
 
     results = []
     for shelter in shelters:
         if district and shelter.get('district') != district:
             continue
 
-        if is_checked('pet_friendly') and not shelter.get('pet_friendly', False):
+        if search_keywords:
+            searchable_text = shelter_search_text(shelter)
+            if not all(keyword in searchable_text for keyword in search_keywords):
+                continue
+
+        if has_criterion(criteria, 'pet_friendly', 'pet', 'pet_allowed', 'pets_allowed', 'ペット可') and not shelter_bool_value(shelter, 'pet_friendly', 'pet', 'pet_allowed', 'pets_allowed', 'ペット可'):
             continue
-        if is_checked('barrier_free') and not shelter.get('barrier_free', False):
+        if has_criterion(criteria, 'barrier_free', 'barrierFree', 'バリアフリー') and not shelter_bool_value(shelter, 'barrier_free', 'barrierFree', 'バリアフリー'):
             continue
-        if is_checked('has_preschool_children') and not shelter.get('has_preschool_children', False):
+        if has_criterion(criteria, 'has_preschool_children', 'preschool', 'preschool_children', '未就学児') and not shelter_bool_value(shelter, 'has_preschool_children', 'preschool', 'preschool_children', '未就学児'):
+            continue
+        capacity = shelter.get('capacity')
+        try:
+            capacity_value = int(capacity) if capacity not in (None, '', 'N/A') else 0
+        except (TypeError, ValueError):
+            capacity_value = 0
+        if requested_count is not None and capacity_value < requested_count:
+            continue
+        if has_criterion(criteria, 'parking_available', 'parking', 'parking_available', '駐車場') and not shelter_bool_value(shelter, 'parking_available', 'parking', '駐車場'):
             continue
 
         if selected_disasters:
-            shelter_disasters = set(shelter.get('disaster_types', []))
-            if not set(selected_disasters).issubset(shelter_disasters):
+            shelter_disasters = shelter_disaster_set(shelter)
+            normalized_required = []
+            for disaster in selected_disasters:
+                aliases = {str(disaster).strip()}
+                if disaster == '地震':
+                    aliases.update({'地震', 'earthquake'})
+                elif disaster == '洪水':
+                    aliases.update({'洪水', 'flood'})
+                elif disaster == '土砂崩れ':
+                    aliases.update({'土砂崩れ', 'landslide'})
+                elif disaster == '津波':
+                    aliases.update({'津波', 'tsunami'})
+                elif disaster == '土石流':
+                    aliases.update({'土石流', 'debris_flow'})
+                elif disaster in {'earthquake', 'flood', 'landslide', 'tsunami', 'debris_flow'}:
+                    aliases.add(str(disaster))
+                    canonical = {
+                        'earthquake': '地震',
+                        'flood': '洪水',
+                        'landslide': '土砂崩れ',
+                        'tsunami': '津波',
+                        'debris_flow': '土石流',
+                    }
+                    aliases.add(canonical[str(disaster)])
+                normalized_required.append(aliases)
+            if any(not aliases.intersection(shelter_disasters) for aliases in normalized_required):
                 continue
 
         results.append(shelter)
@@ -344,7 +500,7 @@ def shelter_register():
 # 避難所検索ページ
 @app.route('/shelter_search')
 def shelter_search():
-    return render_template('shelter_search.html')
+    return render_template('shelter_search.html', shelters=shelters)
 
 # 全施設一覧ページ
 @app.route('/all_shelters')
@@ -355,10 +511,26 @@ def all_shelters():
 @app.route('/search_results')
 def search_results():
     criteria = {
+        'free_search': request.args.get('free_search', ''),
+        'evacuee_count': request.args.get('evacuee_count', '').strip(),
         'pet_friendly': request.args.get('pet_friendly') == 'on',
+        'pet': request.args.get('pet') == 'on',
+        'pet_allowed': request.args.get('pet_allowed') == 'on',
+        'pets_allowed': request.args.get('pets_allowed') == 'on',
         'barrier_free': request.args.get('barrier_free') == 'on',
+        'barrierFree': request.args.get('barrierFree') == 'on',
         'has_preschool_children': request.args.get('has_preschool_children') == 'on',
-        'disaster_types': request.args.getlist('disaster_type')
+        'preschool': request.args.get('preschool') == 'on',
+        'preschool_children': request.args.get('preschool_children') == 'on',
+        'parking_available': request.args.get('parking_available') == 'on',
+        'parking': request.args.get('parking') == 'on',
+        'senior_consideration': request.args.get('senior_consideration') == 'on',
+        'elderly': request.args.get('elderly') == 'on',
+        'elderly_consideration': request.args.get('elderly_consideration') == 'on',
+        'disability_consideration': request.args.get('disability_consideration') == 'on',
+        'disability': request.args.get('disability') == 'on',
+        'senior_disability_support': request.args.get('senior_disability_support') == 'on',
+        'disaster_types': request.args.getlist('disaster_type') or request.args.getlist('disaster_types')
     }
     results = filter_shelters(request.args.get('district'), criteria)
     return render_template('search_results.html', results=results, criteria=criteria)
@@ -390,4 +562,4 @@ def api_weather_warnings():
     return jsonify(get_weather_warnings())
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)

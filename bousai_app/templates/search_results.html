@@ -32,6 +32,12 @@
     font-weight: 700;
   }
 
+  .count {
+    margin: 8px 0 18px;
+    color: #1f4b96;
+    font-weight: 700;
+  }
+
   .shelter-list {
     list-style: none;
     padding: 0;
@@ -80,9 +86,12 @@
 
     {% if criteria %}
       <div class="meta">
-        {% if criteria.pet_friendly %}<span class="tag">ペット可能</span>{% endif %}
-        {% if criteria.barrier_free %}<span class="tag">バリアフリー</span>{% endif %}
-        {% if criteria.has_preschool_children %}<span class="tag">未就学児対応</span>{% endif %}
+        {% if criteria.free_search %}<span class="tag">検索: {{ criteria.free_search }}</span>{% endif %}
+        {% if criteria.evacuee_count %}<span class="tag">避難予定人数: {{ criteria.evacuee_count }}人</span>{% endif %}
+        {% if criteria.pet_friendly or criteria.pet or criteria.pet_allowed %}<span class="tag">ペット可能</span>{% endif %}
+        {% if criteria.barrier_free or criteria.barrierFree %}<span class="tag">バリアフリー</span>{% endif %}
+        {% if criteria.has_preschool_children or criteria.preschool %}<span class="tag">未就学児対応</span>{% endif %}
+        {% if criteria.parking_available or criteria.parking %}<span class="tag">駐車場あり</span>{% endif %}
         {% for disaster in criteria.disaster_types %}
           <span class="tag">{{ disaster }}</span>
         {% endfor %}
@@ -90,14 +99,17 @@
     {% endif %}
 
     {% if results %}
+      <p class="count">{{ results | length }}件の避難所が見つかりました。</p>
       <ul class="shelter-list">
         {% for shelter in results %}
         <li class="shelter-item">
           <h3>{{ shelter.name }}</h3>
           <p>地区: {{ shelter.district or '未登録' }}</p>
-          <p>ペット可能: {{ 'はい' if shelter.pet_friendly else 'いいえ' }}</p>
-          <p>バリアフリー: {{ 'あり' if shelter.barrier_free else 'なし' }}</p>
-          <p>未就学児対応: {{ 'あり' if shelter.has_preschool_children else 'なし' }}</p>
+          <p>収容人数: {{ shelter.capacity or 0 }}人</p>
+          <p>ペット可能: {{ 'はい' if shelter.pet_friendly or shelter.pet or shelter.pet_allowed else 'いいえ' }}</p>
+          <p>バリアフリー: {{ 'あり' if shelter.barrier_free or shelter.barrierFree else 'なし' }}</p>
+          <p>未就学児対応: {{ 'あり' if shelter.has_preschool_children or shelter.preschool else 'なし' }}</p>
+          <p>駐車場: {{ 'あり' if shelter.parking_available or shelter.parking else 'なし' }}</p>
           <p>対応災害: {{ shelter.disaster_types | join(', ') if shelter.disaster_types else '未登録' }}</p>
         </li>
         {% endfor %}

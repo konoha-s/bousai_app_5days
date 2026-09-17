@@ -1,210 +1,252 @@
 {% extends "base.html" %}
 
 {% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <style>
-  .search-page {
-    max-width: 980px;
-    margin: 32px auto;
-    padding: 0 20px 48px;
-  }
-
-  .panel {
-    background: #fff;
-    border: 1px solid #dfeaf7;
-    border-radius: 16px;
-    box-shadow: 0 10px 30px rgba(37, 99, 235, 0.06);
-    padding: 28px;
-  }
-
-  .search-form {
-    display: grid;
-    gap: 24px;
-  }
-
-  .section {
-    border-top: 1px solid #ebf1f9;
-    padding-top: 18px;
-  }
-
-  .section:first-child {
-    border-top: none;
-    padding-top: 0;
-  }
-
-  .section h3 {
-    margin: 0 0 14px;
-    color: #1f4b96;
-    font-size: 1.1rem;
-  }
-
-  .location-row {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  .location-btn,
-  .search-btn,
-  .link-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 10px 18px;
-    border-radius: 999px;
-    border: none;
-    cursor: pointer;
-    text-decoration: none;
-    font-weight: 700;
-  }
-
-  .location-btn {
-    background: #e8f2ff;
-    color: #18499c;
-  }
-
-  .search-btn {
-    background: linear-gradient(135deg, #1d4ed8, #2563eb);
-    color: white;
-    min-width: 180px;
-  }
-
-  .link-btn {
-    background: #edf5ef;
-    color: #1f7d4b;
-  }
-
-  .checkbox-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px 18px;
-  }
-
-  .check-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: #f8fbff;
-    border: 1px solid #e2ebf8;
-    border-radius: 10px;
-    padding: 10px 12px;
-  }
-
-  .check-item input {
-    width: 18px;
-    height: 18px;
-  }
-
-  .result-links {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-top: 20px;
-  }
-
-  @media (max-width: 640px) {
-    .panel { padding: 20px 16px; }
-    .search-btn { width: 100%; }
-  }
+  .search-page { max-width: 1380px; margin: 32px auto; padding: 0 20px 48px; }
+  .search-layout { display: grid; grid-template-columns: minmax(330px, 0.8fr) minmax(480px, 1.2fr); gap: 22px; align-items: start; }
+  .panel { background: #fff; border: 1px solid #dfeaf7; border-radius: 16px; box-shadow: 0 10px 30px rgba(37, 99, 235, 0.06); padding: 28px; }
+  .map-panel { position: sticky; top: 20px; overflow: hidden; min-height: 650px; padding: 0; }
+  #shelter-map { height: 650px; width: 100%; background: #dbeafe; }
+  .map-heading { position: absolute; z-index: 500; top: 14px; left: 56px; margin: 0; padding: 8px 12px; border-radius: 8px; color: #1f4b96; background: rgba(255,255,255,.94); box-shadow: 0 2px 8px rgba(31,75,150,.15); font-size: 1rem; }
+  .map-status { position: absolute; z-index: 500; right: 12px; bottom: 12px; margin: 0; padding: 7px 10px; border-radius: 7px; color: #334155; background: rgba(255,255,255,.94); font-size: .85rem; }
+  .shelter-pin, .location-pin { display: block; position: relative; width: 22px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid white; box-shadow: 0 2px 5px rgba(15,23,42,.35); }
+  .shelter-pin { background: #dc2626; }
+  .location-pin { background: #111827; }
+  .shelter-pin::after, .location-pin::after { content: ''; position: absolute; width: 7px; height: 7px; top: 5px; left: 5px; border-radius: 50%; background: white; }
+  .search-form { display: grid; gap: 24px; }
+  .section, fieldset.section { border: 0; border-top: 1px solid #ebf1f9; padding-top: 18px; margin: 0; }
+  .section:first-child, fieldset.section:first-of-type { border-top: none; padding-top: 0; }
+  .section h3, fieldset.section legend { margin: 0 0 14px; color: #1f4b96; font-size: 1.1rem; font-weight: 700; }
+  .location-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .location-status { margin: 10px 0 0; padding: 8px 10px; border-radius: 7px; background: #f1f5f9; color: #52627a; font-size: .9rem; }
+  .free-search { width: 100%; padding: 12px 14px; border: 1px solid #cbdaf0; border-radius: 9px; color: #334155; font: inherit; }
+  .free-search:focus { outline: 3px solid rgba(37,99,235,.15); border-color: #2563eb; }
+  .location-btn, .search-btn, .link-btn { display: inline-flex; align-items: center; justify-content: center; padding: 10px 18px; border-radius: 999px; border: none; cursor: pointer; text-decoration: none; font-weight: 700; }
+  .location-btn { background: #e8f2ff; color: #18499c; }
+  .search-btn { background: linear-gradient(135deg, #1d4ed8, #2563eb); color: white; min-width: 180px; }
+  .link-btn { background: #edf5ef; color: #1f7d4b; }
+  .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 18px; }
+  .check-item { display: flex; align-items: center; gap: 10px; background: #f8fbff; border: 1px solid #e2ebf8; border-radius: 10px; padding: 10px 12px; }
+  .check-item input { width: 18px; height: 18px; }
+  .result-links { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+  @media (max-width: 640px) { .search-layout { grid-template-columns: 1fr; } .map-panel { position: static; min-height: 420px; } #shelter-map { height: 420px; } .panel { padding: 20px 16px; } .search-btn { width: 100%; } }
 </style>
 
 <div class="search-page">
-  <div class="panel">
-    <h2>避難所検索</h2>
-    <p>現在地や条件を選んで、適した避難所を探せます。</p>
+  <div class="search-layout">
+    <div class="panel">
+      <h2>避難所検索</h2>
+      <p>現在地や条件を選んで、適した避難所を探せます。</p>
 
-    <form class="search-form" method="get" action="/search_results">
-      <div class="section">
-        <h3>位置情報</h3>
-        <div class="location-row">
-          <button type="button" class="location-btn" id="location-btn">位置情報を許可して現在地を取得</button>
+      <form class="search-form" method="get" action="/search_results">
+        <div class="section">
+          <h3>位置情報</h3>
+          <div class="location-row">
+            <button type="button" class="location-btn" id="location-btn">位置情報を許可して現在地を取得</button>
+          </div>
+          <p class="location-status" id="location-status" aria-live="polite"></p>
+          <input type="hidden" name="latitude" id="latitude">
+          <input type="hidden" name="longitude" id="longitude">
         </div>
-        <input type="hidden" name="latitude" id="latitude">
-        <input type="hidden" name="longitude" id="longitude">
-      </div>
 
-      <div class="section">
-        <h3>避難所の条件</h3>
-        <div class="checkbox-grid">
-          <label class="check-item">
-            <input type="checkbox" name="pet_friendly">
-            <span>ペット可能</span>
-          </label>
-          <label class="check-item">
-            <input type="checkbox" name="barrier_free">
-            <span>バリアフリーあり</span>
-          </label>
-          <label class="check-item">
-            <input type="checkbox" name="has_preschool_children">
-            <span>未就学児がいる</span>
-          </label>
+        <div class="section">
+          <h3>フリー検索</h3>
+          <label for="free-search" style="position:absolute;left:-9999px;">避難所名や施設情報</label>
+          <input class="free-search" type="search" name="free_search" id="free-search" placeholder="避難所名、エリア、設備など" autocomplete="off">
+          <p>複数のキーワードはスペース、カンマ、読点、句点で区切れます。</p>
         </div>
-      </div>
 
-      <div class="section">
-        <h3>災害の種類</h3>
-        <div class="checkbox-grid">
-          <label class="check-item">
-            <input type="checkbox" name="disaster_type" value="津波">
-            <span>津波</span>
-          </label>
-          <label class="check-item">
-            <input type="checkbox" name="disaster_type" value="洪水">
-            <span>洪水</span>
-          </label>
-          <label class="check-item">
-            <input type="checkbox" name="disaster_type" value="地滑り">
-            <span>地滑り</span>
-          </label>
-          <label class="check-item">
-            <input type="checkbox" name="disaster_type" value="土石流">
-            <span>土石流</span>
-          </label>
+        <div class="section">
+          <label for="evacuee-count">避難したい人数</label>
+          <input class="free-search" type="number" name="evacuee_count" id="evacuee-count" min="1" step="1" inputmode="numeric" placeholder="人数を入力（例: 50）">
         </div>
-      </div>
 
-      <div class="section">
-        <button type="submit" class="search-btn">避難所を検索</button>
-      </div>
-    </form>
+        <fieldset class="section">
+          <legend>必要な設備</legend>
+          <div class="checkbox-grid">
+            <label class="check-item"><input type="checkbox" name="pet_friendly"><span>ペット可</span></label>
+            <label class="check-item"><input type="checkbox" name="barrier_free"><span>バリアフリーあり</span></label>
+            <label class="check-item"><input type="checkbox" name="has_preschool_children"><span>未就学児</span></label>
+            <label class="check-item"><input type="checkbox" name="parking_available"><span>駐車場</span></label>
+          </div>
+        </fieldset>
 
-    <div class="result-links">
-      <a class="link-btn" href="/all_shelters">全施設一覧</a>
-      <a class="link-btn" href="/">トップページへ戻る</a>
+        <fieldset class="section">
+          <legend>対応する災害</legend>
+          <div class="checkbox-grid">
+            <label class="check-item"><input type="checkbox" name="disaster_type" value="地震"><span>地震</span></label>
+            <label class="check-item"><input type="checkbox" name="disaster_type" value="洪水"><span>洪水</span></label>
+            <label class="check-item"><input type="checkbox" name="disaster_type" value="土砂崩れ"><span>土砂崩れ</span></label>
+          </div>
+        </fieldset>
+
+        <div class="section">
+          <button type="submit" class="search-btn">条件を指定して検索</button>
+        </div>
+      </form>
+
+      <div class="result-links">
+        <a class="link-btn" href="/all_shelters">全施設一覧</a>
+        <a class="link-btn" href="/">トップページへ戻る</a>
+      </div>
+    </div>
+
+    <div class="panel map-panel">
+      <h2 class="map-heading">避難所マップ</h2>
+      <div id="shelter-map" aria-label="避難所の地図"></div>
+      <p class="map-status" id="map-status" aria-live="polite"></p>
     </div>
   </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
-    const button = document.getElementById('location-btn');
+    const locationButton = document.getElementById('location-btn');
+    const locationStatus = document.getElementById('location-status');
     const latitudeInput = document.getElementById('latitude');
     const longitudeInput = document.getElementById('longitude');
 
-    button.addEventListener('click', function () {
+    function setLocationStatus(message) {
+      locationStatus.textContent = message;
+    }
+
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then(function (permission) {
+        if (permission.state === 'denied') {
+          setLocationStatus('位置情報が拒否されています。ブラウザのサイト設定で位置情報を許可してから、もう一度押してください。');
+        } else if (permission.state === 'granted') {
+          setLocationStatus('位置情報は許可されています。「位置情報を許可して現在地を取得」を押してください。');
+        }
+      }).catch(function () {});
+    }
+
+    locationButton.addEventListener('click', function () {
       if (!navigator.geolocation) {
-        alert('このブラウザでは位置情報が利用できません。');
+        setLocationStatus('このブラウザでは位置情報が利用できません。');
         return;
       }
+      if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        setLocationStatus('位置情報を使うには HTTPS 接続が必要です。VS Code のポート転送 URL か localhost で開いてください。');
+        return;
+      }
+      locationButton.disabled = true;
+      locationButton.textContent = '位置情報を取得中...';
+      setLocationStatus('ブラウザの位置情報の許可を確認しています。');
 
-      button.disabled = true;
-      button.textContent = '位置情報を取得中...';
-
-      navigator.geolocation.getCurrentPosition(
-        function (position) {
-          latitudeInput.value = position.coords.latitude;
-          longitudeInput.value = position.coords.longitude;
-          button.textContent = '位置情報を取得しました';
-          button.disabled = false;
-        },
-        function () {
-          alert('位置情報の取得に失敗しました。ブラウザの設定をご確認ください。');
-          button.textContent = '位置情報を許可して現在地を取得';
-          button.disabled = false;
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
+      navigator.geolocation.getCurrentPosition(function (position) {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        latitudeInput.value = latitude;
+        longitudeInput.value = longitude;
+        if (window.shelterMap && window.locationIcon) {
+          if (window.currentLocationMarker) window.shelterMap.removeLayer(window.currentLocationMarker);
+          window.currentLocationMarker = L.marker([latitude, longitude], { icon: window.locationIcon }).addTo(window.shelterMap).bindPopup('<strong>現在地</strong>').openPopup();
+          window.shelterMap.setView([latitude, longitude], 13);
+          setLocationStatus('現在地を取得しました。地図を周辺へ移動しました。');
+        } else {
+          setLocationStatus('現在地を取得しました。地図の読み込みが完了していないため、座標だけ保存しました。');
+        }
+        locationButton.textContent = '位置情報を取得しました';
+        locationButton.disabled = false;
+      }, function (error) {
+        const messages = { 1: '位置情報の利用が拒否されました。ブラウザのサイト設定で許可してください。', 2: '現在地を取得できませんでした。位置情報サービスを確認してください。', 3: '位置情報の取得がタイムアウトしました。もう一度お試しください。' };
+        setLocationStatus(messages[error.code] || '位置情報の取得に失敗しました。ブラウザの設定をご確認ください。');
+        locationButton.textContent = '位置情報を許可して現在地を取得';
+        locationButton.disabled = false;
+      }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
     });
+
+    const shelterData = {{ shelters | tojson }};
+    const map = L.map('shelter-map', { minZoom: 4, maxZoom: 18, zoomControl: true, scrollWheelZoom: true, doubleClickZoom: true, dragging: true }).setView([36.2048, 138.2529], 5);
+    const shelterLayer = L.layerGroup().addTo(map);
+
+    const standardMap = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', { attribution: '<a href="https://maps.gsi.go.jp/development/ichimishiru.html" target="_blank" rel="noopener">国土地理院</a>', maxZoom: 18 }).addTo(map);
+    const paleMap = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', { attribution: '<a href="https://maps.gsi.go.jp/development/ichimishiru.html" target="_blank" rel="noopener">国土地理院</a>', maxZoom: 18 });
+    L.control.layers({ '標準地図（市名が見やすい）': standardMap, '淡色地図': paleMap }).addTo(map);
+
+    const shelterIcon = L.divIcon({ className: '', html: '<span class="shelter-pin"></span>', iconSize: [22, 30], iconAnchor: [11, 30], popupAnchor: [0, -28] });
+    const locationIcon = L.divIcon({ className: '', html: '<span class="location-pin"></span>', iconSize: [22, 30], iconAnchor: [11, 30] });
+    window.shelterMap = map;
+    window.locationIcon = locationIcon;
+
+    function selectedCriteria() {
+      return {
+        free_search: document.getElementById('free-search').value,
+        evacuee_count: document.getElementById('evacuee-count').value,
+        pet_friendly: document.querySelector('[name="pet_friendly"]').checked,
+        barrier_free: document.querySelector('[name="barrier_free"]').checked,
+        has_preschool_children: document.querySelector('[name="has_preschool_children"]').checked,
+        parking_available: document.querySelector('[name="parking_available"]').checked,
+        disaster_types: Array.from(document.querySelectorAll('[name="disaster_type"]:checked')).map(function (input) { return input.value; })
+      };
+    }
+
+    function splitSearchKeywords(value) {
+      return String(value || '').trim().split(/[\s,、。]+/).filter(Boolean).map(function (keyword) { return keyword.toLocaleLowerCase(); });
+    }
+
+    function alignsDisaster(shelter, value) {
+      const target = String(value || '').replace(/[\s　]/g, '').toLowerCase();
+      const values = Array.isArray(shelter.disaster_types) ? shelter.disaster_types : [];
+      return values.some(function (item) {
+        return String(item || '').replace(/[\s　]/g, '').toLowerCase() === target;
+      });
+    }
+
+    function matchesCriteria(shelter, criteria) {
+      const searchableText = Object.values(shelter).map(function (value) {
+        if (Array.isArray(value)) return value.join(' ');
+        return String(value ?? '');
+      }).join(' ').toLocaleLowerCase();
+      const keywords = splitSearchKeywords(criteria.free_search);
+      const requestedCount = Number(criteria.evacuee_count);
+      const hasRequestedCount = criteria.evacuee_count !== '' && Number.isFinite(requestedCount) && requestedCount > 0;
+      return (!criteria.pet_friendly || Boolean(shelter.pet_friendly))
+        && (!criteria.barrier_free || Boolean(shelter.barrier_free))
+        && (!criteria.has_preschool_children || Boolean(shelter.has_preschool_children))
+        && (!criteria.parking_available || Boolean(shelter.parking_available))
+        && (!hasRequestedCount || Number(shelter.capacity || 0) >= requestedCount)
+        && (!keywords.length || keywords.every(function (keyword) { return searchableText.includes(keyword); }))
+        && (!criteria.disaster_types.length || criteria.disaster_types.every(function (type) { return alignsDisaster(shelter, type); }));
+    }
+
+    function adjustForScale(sheltersInBounds, zoom) {
+      if (zoom > 6) return sheltersInBounds;
+      const cellSize = zoom <= 4 ? 0.5 : 0.02;
+      const grouped = new Map();
+      sheltersInBounds.forEach(function (shelter) {
+        const key = Math.floor(shelter.latitude / cellSize) + ':' + Math.floor(shelter.longitude / cellSize);
+        if (!grouped.has(key)) grouped.set(key, shelter);
+      });
+      return Array.from(grouped.values());
+    }
+
+    function renderShelters() {
+      const criteria = selectedCriteria();
+      const bounds = map.getBounds();
+      const zoom = map.getZoom();
+      const sheltersInBounds = shelterData.filter(function (shelter) {
+        return Number.isFinite(Number(shelter.latitude)) && Number.isFinite(Number(shelter.longitude)) && bounds.contains([shelter.latitude, shelter.longitude]) && matchesCriteria(shelter, criteria);
+      });
+      const visibleShelters = adjustForScale(sheltersInBounds, zoom);
+      shelterLayer.clearLayers();
+      visibleShelters.forEach(function (shelter) {
+        const marker = L.marker([shelter.latitude, shelter.longitude], { icon: shelterIcon });
+        marker.bindPopup('<strong>' + L.Util.escapeHTML(shelter.name) + '</strong>' + '<br>地区: ' + L.Util.escapeHTML(shelter.district || '未登録') + '<br>収容人数: ' + (shelter.capacity || 0) + '人' + '<br>ペット可能: ' + (shelter.pet_friendly ? 'はい' : 'いいえ') + '<br>バリアフリー: ' + (shelter.barrier_free ? 'あり' : 'なし') + '<br>駐車場: ' + (shelter.parking_available ? 'あり' : 'なし') + '<br>高齢者・障がいのある方への配慮: ' + (shelter.senior_disability_support ? 'あり' : 'なし') + '<br>対応災害: ' + L.Util.escapeHTML((shelter.disaster_types || []).join(', ') || '未登録'));
+        shelterLayer.addLayer(marker);
+      });
+      const zoomMessage = zoom <= 6 ? '広域表示' : zoom <= 10 ? '地域表示' : '詳細表示';
+      document.getElementById('map-status').textContent = zoomMessage + '・表示中の避難所 ' + visibleShelters.length + '件';
+    }
+
+    map.on('moveend zoomend', renderShelters);
+    document.querySelectorAll('.search-form input[type="checkbox"]').forEach(function (input) { input.addEventListener('change', renderShelters); });
+    document.getElementById('free-search').addEventListener('input', renderShelters);
+    document.getElementById('evacuee-count').addEventListener('input', renderShelters);
+    renderShelters();
+    setTimeout(function () { map.invalidateSize(); }, 0);
   });
 </script>
 {% endblock %}
